@@ -18,7 +18,7 @@ int main() {
 
     #pragma omp parallel for shared(sieve_eratosthenes, primes_amount) private(i, j)
     for(i = 2; i <= max_sqrt; i++){
-        if(sieve_eratosthenes){
+        if(sieve_eratosthenes[i]){
             for(j = 2*i; j < max; j += i){
                 sieve_eratosthenes[j] = 0;
             }
@@ -27,7 +27,7 @@ int main() {
 
     #pragma omp for schedule(guided)
     for(i = 2; i < max; i ++){
-        if(sieve_eratosthenes){
+        if(sieve_eratosthenes[i]){
             #pragma omp atomic
             primes_amount++;
         }
