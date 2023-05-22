@@ -24,18 +24,9 @@ int main(){
     int max_sqrt = sqrt(max);
     int primes_amount = 0;
 
-    int* prime_table = malloc(max * sizeof(int));
-
     //Sprawdzanie liczb czy sa pierwsze 
     for(int i = 0; i <= max; i++){
-        prime_table[i] = check_prime(i);
-    }
-
-    //Podliczanie ilosci liczb pierwszych
-    for(int i = 0; i <= max; i++){
-        if(prime_table[i]){
-            primes_amount ++;
-        }
+        primes_amount += check_prime(i);
     }
 
     printf("[Dzielenie Sekwencyjne] Ilosc liczb pierwszych: %d", primes_amount);
