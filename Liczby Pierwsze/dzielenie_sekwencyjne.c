@@ -3,45 +3,37 @@
 #include <math.h>
 #include <stdlib.h>
 
-//Funkcja sprawdzajaca dzieleniem, czy liczba jest pierwsza
-int check_prime(int number){
-    if(number < 2){
-        return 0;
-    }
-
-    for(int i = 2; i <= sqrt(number); i++){
-        if(number % i == 0){
-            return 0;
-        }
-    }
-
-    return 1;
-}
-
-
-
 int main(){
     //Tworzenie potrzebnych zmiennych
-    int min = 2;
     int max = 100000000;
     int max_sqrt = sqrt(max);
     int primes_amount = 0;
 
-    int* prime_table = malloc(max * sizeof(int));
+    int* sieve_eratosthenes = malloc(max * sizeof(int));
 
-    //Sprawdzanie liczb czy sa pierwsze 
-    for(int i = 0; i <= max; i++){
-        prime_table = check_prime(i);
+    //Ustawienie sita na wartosci 1
+    for(int i = 0; i < max; i++){
+        sieve_eratosthenes[i] = 1;
     }
 
-    //Podliczanie ilosci liczb pierwszych
-    for(int i = 0; i <= max; i++){
-        if(prime_table[i]){
-            primes_amount ++;
+    //Sprawdzenie liczb czy sa pierwsze metoda sita Eratostenesa
+    for(int i = 2; i <= max_sqrt; i++){
+        if(sieve_eratosthenes[i]){
+            for(int j = 2*i; j <= max; j += i){
+                sieve_eratosthenes[j] = 0;
+            }
         }
     }
 
-    printf("[Dzielenie Sekwencyjne] Ilosc liczb pierwszych: %d", primes_amount);
+    //Podliczanie ilosci liczb pierwszych
+    for(int i = 2; i < max; i++){
+        if(sieve_eratosthenes[i]){
+            primes_amount++;
+        }
+    }
 
+    printf("[Dodawanie Sekwencyjne] Ilosc liczb pierwszych: %d", primes_amount);
+    
     return 0;
+    
 }
