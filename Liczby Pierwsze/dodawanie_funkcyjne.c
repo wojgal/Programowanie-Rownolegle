@@ -22,11 +22,18 @@ int main() {
             for(j = 2*i; j < max; j += i){
                 sieve_eratosthenes[j] = 0;
             }
+        }
+    }
+
+    #pragma omp for schedule(guided)
+    for(i = 2; i < max; i ++){
+        if(sieve_eratosthenes){
+            #pragma omp atomic
             primes_amount++;
         }
     }
-    
+
     printf("[Dodawanie Funkcyjne] Ilosc liczb pierwszych: %d", primes_amount);
-    
+
     return 0;
 }
