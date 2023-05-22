@@ -24,6 +24,8 @@ int main() {
             primes_amount++;
         }
     }
-
+    
+    printf("[Dodawanie Funkcyjne] Ilosc liczb pierwszych: %d", primes_amount);
+    
     return 0;
 }
