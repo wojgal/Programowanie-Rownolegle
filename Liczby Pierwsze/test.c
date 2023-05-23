@@ -39,13 +39,16 @@ int main() {
             }
         }
     }
-    }
-#pragma omp parallel for schedule(guided) reduction(+:primes_amount)
+
+    #pragma omp barrier
+
+    #pragma omp parallel for schedule(guided) private(i) reduction(+:primes_amount)
     for (__uint64_t i = 2; i < max; i++) {
         if (sieve_eratosthenes[i]) {
             primes_amount++;
         }
     }
+}
 
     printf("[Dodawanie Domenowe] Ilosc liczb pierwszych: %ld", primes_amount);
     free(sieve_eratosthenes);
