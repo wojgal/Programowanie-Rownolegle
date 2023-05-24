@@ -19,6 +19,7 @@ int check_prime(int number){
     return 1;
 }
 
+//Funkcja wypisujaca wyniki
 void print(bool* sieve_eratosthenes, int min, int max){
     int primes_amount = 0;
     int counter = 0;
@@ -43,9 +44,6 @@ int main(){
     //Tworzenie potrzebnych zmiennych
     int min = 50;
     int max = 100;
-    int max_sqrt = sqrt(max);
-    int primes_amount = 0;
-    bool prime;
     bool* sieve_eratosthenes = (bool *)calloc(max-min+1, sizeof(bool));
 
     //Zmienna odpowiadajca za wypisywanie 
@@ -53,9 +51,7 @@ int main(){
 
     //Sprawdzanie liczb czy sa pierwsze 
     for(int i = min; i <= max; i++){
-        prime = check_prime(i);
-        primes_amount += prime;
-        sieve_eratosthenes[i - min] = prime;
+        sieve_eratosthenes[i - min] = check_prime(i)
     }
 
     if(print_result){
