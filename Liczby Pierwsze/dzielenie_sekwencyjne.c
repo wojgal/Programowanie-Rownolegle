@@ -42,8 +42,8 @@ void print(bool* sieve_eratosthenes, int min, int max){
 
 int main(){
     //Tworzenie potrzebnych zmiennych
-    int min = 50;
-    int max = 100;
+    int min = 2;
+    int max = 100000000;
     bool* sieve_eratosthenes = (bool *)calloc(max-min+1, sizeof(bool));
 
     //Zmienna odpowiadajca za wypisywanie 
