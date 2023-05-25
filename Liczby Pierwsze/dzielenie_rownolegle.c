@@ -2,30 +2,63 @@
 #include <omp.h>
 #include <math.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 //Funkcja sprawdzajaca dzieleniem, czy liczba jest pierwsza
 int check_prime(int number){
+    if(number < 2){
+        return 0;
+    }
+
     for(int i = 2; i <= sqrt(number); i++){
         if(number % i == 0){
             return 0;
         }
     }
+
     return 1;
+}
+
+//Funkcja wypisujaca wyniki
+void print(bool* sieve_eratosthenes, int min, int max){
+    int primes_amount = 0;
+    int counter = 0;
+
+    printf("Liczby pierwsze dla przedzialu %d - %d:\n\n", min, max);
+    for(int i = 0; i <= max - min + 1; i++){
+        if(sieve_eratosthenes[i]){
+            printf("%d ", i + min);
+            primes_amount++;
+            counter++;
+        }
+        if(counter == 10){
+            counter = 0;
+            printf("\n");
+        }
+    }
+
+    printf("\n\nIlosc liczb pierwszych w przedziale %d - %d wynosi: %d\n", min, max, primes_amount);
 }
 
 int main(){
     //Tworzenie potrzebnych zmiennych
     int min = 2;
     int max = 100000000;
-    int primes_amount = 0;
+    bool* sieve_eratosthenes = (bool *)calloc(max-min+1, sizeof(bool));
+
+    //Zmienna odpowiadajca za wypisywanie 
+    bool print_result = false;
+    omp_set_num_threads(8);
 
     //Sprawdzanie liczb czy sa pierwsze 
-    #pragma omp parallel for schedule(guided) reduction(+:primes_amount)
+    #pragma omp parallel for schedule(guided)
     for(int i = min; i <= max; i++){
-        primes_amount += check_prime(i);
+        sieve_eratosthenes[i-min] = check_prime(i);
     }
 
-    printf("[Dzielenie Rownolegle] Ilosc liczb pierwszych: %d", primes_amount);
+    if(print_result){
+        print(sieve_eratosthenes, min, max);
+    }
 
     return 0;
 }
