@@ -10,7 +10,7 @@ void print(bool* sieve_eratosthenes, int min, int max) {
     int counter = 0;
 
     printf("Liczby pierwsze dla przedzialu %d - %d:\n\n", min, max);
-    for (int i = 0; i <= max - min + 1; i++) {
+    for (int i = 0; i <= max - min; i++) {
         if (sieve_eratosthenes[i]) {
             printf("%d ", i + min);
             primes_amount++;
@@ -41,41 +41,38 @@ void get_start_primes(bool* start_primes, int min) {
 
 int main() {
     //Tworzenie potzebnych zmiennych
-    int min = 53;
-    int max = 100;
+    int min = 2;
+    int max = 1000000000;
     int max_sqrt = sqrt(max);
     int thread_number = 8;
-    bool* start_primes;
+    bool* start_primes = (bool*)calloc(min - 2, sizeof(bool));
 
     bool* sieve_eratosthenes = (bool*)calloc(max - min + 1, sizeof(bool));
 
     //Zmienna odpowiadajca za wypisywanie 
-    bool print_result = true;
+    bool print_result = false;
 
     if (min > 2) {
-        start_primes = (bool*)calloc(min - 2, sizeof(bool));
         get_start_primes(start_primes, min);
     }
 
     //Ustawienie sita na wartosci 1
     for (int i = min; i <= max; i++) {
-        sieve_eratosthenes[i-min] = 1;
+        sieve_eratosthenes[i - min] = 1;
     }
-
+    omp_set_num_threads(8);
     //Sprawdzenie liczb czy sa pierwsze metoda sita Eratostenesa
-//#pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(dynamic) shared(sieve_eratosthenes)
     for (int x = 0; x < thread_number; x++) {
         int start = x * (max / thread_number) + 1;
 
         if (start < 2) {
             start = 2;
         }
-        printf("%d ", start);
         int end = (x + 1) * (max / thread_number);
-        if (x == thread_number-1){
+        if (x == thread_number - 1) {
             end = max;
         }
-        printf("%d \n", end);
 
 
         for (int i = start; i <= end; i++) {
@@ -103,6 +100,9 @@ int main() {
     if (print_result) {
         print(sieve_eratosthenes, min, max);
     }
+
+    free(start_primes);
+    free(sieve_eratosthenes);
 
     return 0;
 }
