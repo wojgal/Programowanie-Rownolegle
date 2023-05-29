@@ -62,4 +62,8 @@ int main() {
         }
     }
 
-    free(isPrime);  // Zwolnienie
+    free(isPrime);  // Zwolnienie pamięci
+    free(tmp);  // Zwolnienie pamięci
+
+    return 0;
+}
