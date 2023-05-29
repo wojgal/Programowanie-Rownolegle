@@ -25,8 +25,8 @@ void print(bool* sieve_eratosthenes, int min, int max) {
 }
 
 void get_start_primes(bool* start_primes, int min) {
-    for (int i = 0; i < min - 2; i++) {
-        start_primes[i] = true;
+    for (int i = 2; i <= min; i++) {
+        start_primes[i - 2] = true;
     }
 
     for (int i = 2; i <= sqrt(min); i++) {
@@ -41,7 +41,6 @@ void get_start_primes(bool* start_primes, int min) {
 int main() {
     int min = 2;
     int max = 1000000000;
-    int max_sqrt = sqrt(max);
     int thread_number = 8;
     bool* start_primes = (bool*)calloc(max - 2, sizeof(bool));
     bool* sieve_eratosthenes = (bool*)calloc(max - min + 1, sizeof(bool));
@@ -51,9 +50,8 @@ int main() {
         get_start_primes(start_primes, min);
     }
 
-    #pragma omp parallel
+    #pragma omp parallel num_threads(thread_number)
     {
-        bool* thread_start_primes = (bool*)calloc(max - 2, sizeof(bool));
         bool* thread_sieve_eratosthenes = (bool*)calloc(max - min + 1, sizeof(bool));
 
         #pragma omp for schedule(dynamic)
@@ -88,15 +86,11 @@ int main() {
 
         #pragma omp critical
         {
-            for (int i = 0; i <= max - 2; i++) {
-                start_primes[i] |= thread_start_primes[i];
-            }
             for (int i = 0; i <= max - min; i++) {
                 sieve_eratosthenes[i] |= thread_sieve_eratosthenes[i];
             }
         }
 
-        free(thread_start_primes);
         free(thread_sieve_eratosthenes);
     }
 
