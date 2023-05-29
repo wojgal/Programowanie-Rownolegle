@@ -1,11 +1,18 @@
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <omp.h>
 
 #define N 100000001
+#define CHUNK_SIZE 10000
 
 int main() {
-    bool isPrime[N];
+    bool *isPrime = (bool *)malloc(N * sizeof(bool));
+    if (isPrime == NULL) {
+        printf("Błąd alokacji pamięci.\n");
+        return 1;
+    }
+
     int i, j;
 
     // Inicjalizacja tablicy
@@ -18,12 +25,12 @@ int main() {
     {
         int numThreads = omp_get_num_threads();
         int threadId = omp_get_thread_num();
-        int chunkSize = (N - 2) / numThreads;
-        int start = 2 + threadId * chunkSize;
-        int end = start + chunkSize;
+        int numChunks = N / CHUNK_SIZE;
+        int chunkStart = threadId * numChunks;
+        int chunkEnd = chunkStart + numChunks;
 
         // Obszar obliczeń dla każdego wątku
-        for (i = start; i < end; i++) {
+        for (i = 2 + chunkStart; i < N && i < 2 + chunkEnd; i++) {
             if (isPrime[i]) {
                 for (j = i * i; j < N; j += i) {
                     isPrime[j] = false;
@@ -38,6 +45,8 @@ int main() {
             printf("%d ", i);
         }
     }
+
+    free(isPrime);  // Zwolnienie pamięci
 
     return 0;
 }
