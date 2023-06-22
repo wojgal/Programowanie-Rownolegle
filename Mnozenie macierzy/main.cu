@@ -18,14 +18,19 @@ __global__ void matrixMultiplication(float *A, float *B, float *C, BlockStatus *
     int blockCol = col / BLOCK_SIZE;
     int blockIndex = blockRow * (N / BLOCK_SIZE) + blockCol;
 
+    while (status[blockIndex].state != 2)
+    {
+        // Oczekiwanie na zakończenie pobierania danych przez inny blok
+        __threadfence();
+    }
+
     float sum = 0.0f;
     for (int i = 0; i < N; i++)
     {
         sum += A[row * N + i] * B[i * N + col];
     }
 
-    // Oczekiwanie na zakończenie przetwarzania wszystkich wątków w bloku
-    __syncthreads();
+    C[row * N + col] = sum;
 
     if (threadIdx.x == 0 && threadIdx.y == 0)
     {
@@ -33,14 +38,8 @@ __global__ void matrixMultiplication(float *A, float *B, float *C, BlockStatus *
         atomicExch(&status[blockIndex].state, 2);
     }
 
-    // Oczekiwanie na zakończenie pobierania danych przez inny blok
-    while (status[blockIndex].state != 2)
-    {
-        // Oczekiwanie na zakończenie pobierania danych przez inny blok
-        __threadfence();
-    }
-
-    C[row * N + col] = sum;
+    // Synchronizacja wszystkich wątków w bloku przed kontynuacją
+    __threadfence();
 }
 
 void initializeMatrices(float* A, float* B, int size)
@@ -80,4 +79,17 @@ int main()
     dim3 blockSize(BLOCK_SIZE, BLOCK_SIZE);
     dim3 gridSize(N / blockSize.x, N / blockSize.y);
 
-    matrixMultiplication<<<
+    matrixMultiplication<<<gridSize, blockSize>>>(d_A, d_B, d_C, d_status);
+
+    cudaMemcpy(C, d_C, size, cudaMemcpyDeviceToHost);
+
+    free(A);
+    free(B);
+    free(C);
+    cudaFree(d_A);
+    cudaFree(d_B);
+    cudaFree(d_C);
+    cudaFree(d_status);
+
+    return 0;
+}
