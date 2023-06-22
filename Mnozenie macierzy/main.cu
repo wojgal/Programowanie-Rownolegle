@@ -1,36 +1,19 @@
 #include <stdio.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
-#include <cstdlib>
-#include <ctime>
 
-#define N 1024 // Wielkość macierzy
-#define BLOCK_SIZE 16 // Wielkość bloku wątków
+#define N 1024
+#define BLOCK_SIZE 16
 
-// Struktura przechowująca informacje o etapach pobierania bloków danych
 struct BlockStatus {
-    int state; // Stan bloku: 0 - brak pobierania, 1 - pobieranie w toku, 2 - pobieranie zakończone
+    int state;
 };
 
-// Inicjalizacja macierzy A i B
-void initializeMatrices(float* A, float* B, int size)
-{
-    srand(static_cast<unsigned int>(time(0)));
-
-    for (int i = 0; i < size; ++i)
-    {
-        A[i] = static_cast<float>(rand()) / RAND_MAX;
-        B[i] = static_cast<float>(rand()) / RAND_MAX;
-    }
-}
-
-// Funkcja do mnożenia macierzy na GPU
 __global__ void matrixMultiplication(float *A, float *B, float *C, BlockStatus *status)
 {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
 
-    // Synchronizacja bloków wątków
     int blockRow = row / BLOCK_SIZE;
     int blockCol = col / BLOCK_SIZE;
     int blockIndex = blockRow * (N / BLOCK_SIZE) + blockCol;
@@ -38,6 +21,8 @@ __global__ void matrixMultiplication(float *A, float *B, float *C, BlockStatus *
     while (status[blockIndex].state != 2)
     {
         // Oczekiwanie na zakończenie pobierania danych przez inny blok
+        // Można dodać instrukcję __syncthreads() w celu synchronizacji wątków wewnątrz bloku
+        __syncthreads();
     }
 
     float sum = 0.0f;
@@ -48,49 +33,54 @@ __global__ void matrixMultiplication(float *A, float *B, float *C, BlockStatus *
 
     C[row * N + col] = sum;
 
-    // Aktualizacja stanu bloku wątków
-    status[blockIndex].state = 2;
+    if (threadIdx.x == 0 && threadIdx.y == 0)
+    {
+        // Aktualizacja stanu bloku wątków
+        atomicExch(&status[blockIndex].state, 2);
+    }
+}
+
+void initializeMatrices(float* A, float* B, int size)
+{
+    srand(time(NULL));
+
+    for (int i = 0; i < size; i++)
+    {
+        A[i] = static_cast<float>(rand()) / RAND_MAX;
+        B[i] = static_cast<float>(rand()) / RAND_MAX;
+    }
 }
 
 int main()
 {
-    float *A, *B, *C; // Macierze na host (CPU)
-    float *d_A, *d_B, *d_C; // Macierze na device (GPU)
+    float *A, *B, *C;
+    float *d_A, *d_B, *d_C;
     int size = N * N * sizeof(float);
 
-    // Alokacja pamięci dla macierzy na host
     A = (float*)malloc(size);
     B = (float*)malloc(size);
     C = (float*)malloc(size);
 
-    // Inicjalizacja macierzy A i B
-    initializeMatrices(A, B, N* N);
+    initializeMatrices(A, B, N * N);
 
-    // Alokacja pamięci dla macierzy na device
     cudaMalloc(&d_A, size);
     cudaMalloc(&d_B, size);
     cudaMalloc(&d_C, size);
 
-    // Kopiowanie danych z host do device
     cudaMemcpy(d_A, A, size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_B, B, size, cudaMemcpyHostToDevice);
 
-    // Inicjalizacja danych synchronizacyjnych na device
     BlockStatus *d_status;
     cudaMalloc(&d_status, sizeof(BlockStatus) * (N / BLOCK_SIZE) * (N / BLOCK_SIZE));
     cudaMemset(d_status, 0, sizeof(BlockStatus) * (N / BLOCK_SIZE) * (N / BLOCK_SIZE));
 
-    // Określenie rozmiaru siatki i bloku wątków
     dim3 blockSize(BLOCK_SIZE, BLOCK_SIZE);
     dim3 gridSize(N / blockSize.x, N / blockSize.y);
 
-    // Wywołanie kernela
     matrixMultiplication<<<gridSize, blockSize>>>(d_A, d_B, d_C, d_status);
 
-    // Kopiowanie wyników z device do host
     cudaMemcpy(C, d_C, size, cudaMemcpyDeviceToHost);
 
-    // Zwolnienie pamięci na host i device
     free(A);
     free(B);
     free(C);
