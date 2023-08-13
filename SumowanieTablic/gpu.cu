@@ -2,69 +2,89 @@
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 
-__global__ void calculateOutputParallel(const int* input, int* output, int N, int R) {
+// N - dlugosc tablicy
+// R - dlugosc promienia zliczania
+// BS - wielkosc bloku
+
+__global__ void calculate(const int* input_tab, int* output_tab, int N, int R) {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
-    int outputSize = N - 2 * R;
+
+    int output_tab_size = N - 2 * R;
 
     if (row >= R && row < N - R && col >= R && col < N - R) {
         int sum = 0;
+
         for (int r = -R; r <= R; ++r) {
             for (int c = -R; c <= R; ++c) {
-                sum += input[(row + r) * N + col + c];
+                sum += input_tab[(row + r) * N + col + c];
             }
         }
-        output[(row - R) * outputSize + (col - R)] = sum;
+
+        output_tab[(row - R) * output_tab_size + (col - R)] = sum;
     }
 }
 
-void print_table(int* table, int tab_size) {
-    for (int i = 0; i < tab_size; i++) {
+
+
+// Wypelnianie tablicy liczbami 0 - 100
+void fill_table(int* table, int tab_size){
+    for(int i = 0; i < tab_size; i++){
+        table[i] = i % 100;
+    }
+}
+
+
+
+void print_table(int* table, int tab_size){
+    for(int i = 0; i < tab_size; i++){
         std::cout << table[i] << " ";
     }
 }
 
-int main() {
-    int N = 6; // Rozmiar tablicy
-    int R = 2; // Promień
-    int inputSize = N * N;
-    int outputSize = (N - 2 * R) * (N - 2 * R);
-    int* hostInput = new int[inputSize];
-    int* hostOutputGPU = new int[outputSize];
 
-    // Wypełnij tablicę wejściową przykładowymi wartościami
-    for (int i = 0; i < inputSize; ++i) {
-        hostInput[i] = i;
-    }
+
+
+int main() {
+    const int N = 8;
+    const int R = 1;
+
+    const int input_tab_size = N * N;
+    const int output_tab_size = (N - 2 * R) * (N - 2 * R);
+
+    int* host_input = new int[input_tab_size];
+    int* host_output = new int[output_tab_size];
+
+    fill_table(host_input, input_tab_size);
 
     // Alokuje pamięć na GPU
-    int* deviceInput;
-    int* deviceOutput;
-    cudaMalloc((void**)&deviceInput, inputSize * sizeof(int));
-    cudaMalloc((void**)&deviceOutput, outputSize * sizeof(int));
+    int* device_input;
+    int* device_output;
+    cudaMalloc((void**)&device_input, input_tab_size * sizeof(int));
+    cudaMalloc((void**)&device_output, output_tab_size * sizeof(int));
 
     // Kopiuje dane z CPU do GPU
-    cudaMemcpy(deviceInput, hostInput, inputSize * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(device_input, host_input, input_tab_size * sizeof(int), cudaMemcpyHostToDevice);
 
     // Konfiguracja wątków i bloków
     dim3 blockSize(16, 16);
     dim3 gridSize((N - 2 * R + blockSize.x - 1) / blockSize.x, (N - 2 * R + blockSize.y - 1) / blockSize.y);
 
     // Wywołanie kernela na GPU
-    calculateOutputParallel << <gridSize, blockSize >> > (deviceInput, deviceOutput, N, R);
+    calculate<<<gridSize, blockSize>>>(device_input, device_output, N, R);
 
     // Kopiowanie wyników z GPU do CPU
-    cudaMemcpy(hostOutputGPU, deviceOutput, outputSize * sizeof(int), cudaMemcpyDeviceToHost);
+    cudaMemcpy(host_output, device_output, output_tab_size * sizeof(int), cudaMemcpyDeviceToHost);
 
-    print_table(hostOutputGPU, outputSize);
+    print_table(host_output, output_tab_size);
 
     // Zwolnienie pamięci na GPU
-    cudaFree(deviceInput);
-    cudaFree(deviceOutput);
+    cudaFree(device_input);
+    cudaFree(device_output);
 
     // Zwolnienie pamięci na CPU
-    delete[] hostInput;
-    delete[] hostOutputGPU;
+    delete[] host_input;
+    delete[] host_output;
 
     return 0;
 }
