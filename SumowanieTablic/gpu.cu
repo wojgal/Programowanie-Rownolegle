@@ -1,47 +1,92 @@
 #include <iostream>
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
+#include <math.h>
+
+#define BS 8
+#define N 300
+#define R 2
+#define K 1
 
 // N - dlugosc tablicy
 // R - dlugosc promienia zliczania
 // BS - wielkosc bloku
 
-__global__ void calculate(const int* input_tab, int* output_tab, int N, int R) {
+__global__ void calculate(const int* input_tab, int* output_tab, int Nx, int Rx, int Kx) {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int col = (blockIdx.x * blockDim.x + threadIdx.x)*Kx-1;
 
-    int output_tab_size = N - 2 * R;
+    int output_tab_size = Nx - 2 * Rx;
 
-    if (row >= R && row < N - R && col >= R && col < N - R) {
-        int sum = 0;
+    int output_row_offset = (row - Rx) * output_tab_size;
 
-        for (int r = -R; r <= R; ++r) {
-            for (int c = -R; c <= R; ++c) {
-                sum += input_tab[(row + r) * N + col + c];
+    for (int k_iter = 0; k_iter < Kx; k_iter++) {
+        col ++;
+
+        if (row >= Rx && row < Nx - Rx && col >= Rx && col < Nx - Rx) {
+            int sum = 0;
+
+            for (int r = -Rx; r <= Rx; ++r) {
+                for (int c = -Rx; c <= Rx; ++c) {
+                    sum += input_tab[(row + r) * Nx + col + c];
+                }
             }
+            output_tab[output_row_offset + col - Rx] = sum;
         }
-
-        output_tab[(row - R) * output_tab_size + (col - R)] = sum;
-    }
-    else{
-        std::cout << "Error, nie spelnino warunku N > 2R.\n";
-        return;
     }
 }
 
+__global__ void calculateShared(const int* input_tab, int* output_tab, int Nx, int Rx, int Kx) {
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = (blockIdx.x * blockDim.x + threadIdx.x) * Kx - 1;
 
+    int output_tab_size = Nx - 2 * Rx;
+
+    int output_row_offset = (row - Rx) * output_tab_size;
+    int input_row_offset = threadIdx.y + Rx;
+    int input_col_offset = threadIdx.x + Rx;
+
+    // Lokalna pamiec wpoldzielona
+    __shared__ int shared_input_tab[BS + 2 * R][BS + 2 * R];
+
+    for (int k_iter = 0; k_iter < Kx; k_iter++) {
+        col++;
+
+        //Przekopiowanie danych do pamieci wspoldzielonej
+        shared_input_tab[input_row_offset][input_col_offset] = input_tab[row * Nx + col];
+        __syncthreads();
+
+        if (row >= Rx && row < Nx - Rx && col >= Rx && col < Nx - Rx) {
+            int sum = 0;
+
+            for (int r = -Rx; r <= Rx; ++r) {
+                for (int c = -Rx; c <= Rx; ++c) {
+                    sum += shared_input_tab[input_row_offset + r][input_col_offset + c];
+                }
+            }
+
+            output_tab[output_row_offset + col - Rx] = sum;
+        }
+
+        __syncthreads();
+    }
+}
 
 // Wypelnianie tablicy liczbami 0 - 100
-void fill_table(int* table, int tab_size){
-    for(int i = 0; i < tab_size; i++){
+void fill_table(int* table, int tab_size) {
+    for (int i = 0; i < tab_size; i++) {
         table[i] = i % 100;
     }
 }
 
 
 
-void print_table(int* table, int tab_size){
-    for(int i = 0; i < tab_size; i++){
+void print_table(int* table, int tab_size) {
+    for (int i = 0; i < tab_size; i++) {
+
+        if (i % int(sqrt(tab_size)) == 0) {
+            std::cout << "\n";
+        }
         std::cout << table[i] << " ";
     }
 }
@@ -50,9 +95,6 @@ void print_table(int* table, int tab_size){
 
 
 int main() {
-    const int N = 6;
-    const int R = 2;
-
     const int input_tab_size = N * N;
     const int output_tab_size = (N - 2 * R) * (N - 2 * R);
 
@@ -66,13 +108,15 @@ int main() {
     fill_table(device_input, input_tab_size);
 
     // Konfiguracja wątków i bloków
-    dim3 blockSize(16, 16);
+    dim3 blockSize(BS, BS);
     dim3 gridSize((N - 2 * R + blockSize.x - 1) / blockSize.x, (N - 2 * R + blockSize.y - 1) / blockSize.y);
 
     // Wywołanie kernela na GPU
-    calculate<<<gridSize, blockSize>>>(device_input, device_output, N, R);
+    calculateShared << <gridSize, blockSize >> > (device_input, device_output, N, R, K);
 
-    print_table(device_output, output_tab_size);
+    cudaDeviceSynchronize();
+
+   // print_table(device_output, output_tab_size);
 
     // Zwolnienie pamięci na GPU
     cudaFreeHost(device_input);
