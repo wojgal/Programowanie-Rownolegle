@@ -4,7 +4,7 @@
 #include <math.h>
 
 #define BS 8
-#define N 300
+#define N 20
 #define R 2
 #define K 1
 
@@ -14,20 +14,20 @@
 
 __global__ void calculate(const int* input_tab, int* output_tab, int Nx, int Rx, int Kx) {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
-    int col = (blockIdx.x * blockDim.x + threadIdx.x)*Kx-1;
+    int col = (blockIdx.x * blockDim.x + threadIdx.x) * Kx - 1;
 
     int output_tab_size = Nx - 2 * Rx;
 
     int output_row_offset = (row - Rx) * output_tab_size;
 
     for (int k_iter = 0; k_iter < Kx; k_iter++) {
-        col ++;
+        col++;
 
         if (row >= Rx && row < Nx - Rx && col >= Rx && col < Nx - Rx) {
             int sum = 0;
 
-            for (int r = -Rx; r <= Rx; ++r) {
-                for (int c = -Rx; c <= Rx; ++c) {
+            for (int r = -Rx; r <= Rx; r++) {
+                for (int c = -Rx; c <= Rx; c++) {
                     sum += input_tab[(row + r) * Nx + col + c];
                 }
             }
@@ -36,39 +36,33 @@ __global__ void calculate(const int* input_tab, int* output_tab, int Nx, int Rx,
     }
 }
 
-__global__ void calculateShared(const int* input_tab, int* output_tab, int Nx, int Rx, int Kx) {
+__global__ void calculateShared(int* input_tab, int* output_tab, int Nx, int Rx, int Kx) {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
-    int col = (blockIdx.x * blockDim.x + threadIdx.x) * Kx - 1;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
 
     int output_tab_size = Nx - 2 * Rx;
+    const int shared_input_tab_size = BS + 2 * R + 1;
 
-    int output_row_offset = (row - Rx) * output_tab_size;
-    int input_row_offset = threadIdx.y + Rx;
-    int input_col_offset = threadIdx.x + Rx;
+    if (col < output_tab_size && row < output_tab_size) {
+        __shared__ int shared_input_tab[shared_input_tab_size][shared_input_tab_size];
 
-    // Lokalna pamiec wpoldzielona
-    __shared__ int shared_input_tab[BS + 2 * R][BS + 2 * R];
-
-    for (int k_iter = 0; k_iter < Kx; k_iter++) {
-        col++;
-
-        //Przekopiowanie danych do pamieci wspoldzielonej
-        shared_input_tab[input_row_offset][input_col_offset] = input_tab[row * Nx + col];
-        __syncthreads();
-
-        if (row >= Rx && row < Nx - Rx && col >= Rx && col < Nx - Rx) {
-            int sum = 0;
-
-            for (int r = -Rx; r <= Rx; ++r) {
-                for (int c = -Rx; c <= Rx; ++c) {
-                    sum += shared_input_tab[input_row_offset + r][input_col_offset + c];
+        if (threadIdx.x == 0 && threadIdx.y == 0) {
+            for (int i = 0; i < shared_input_tab_size; i++) {
+                for (int j = 0; j < shared_input_tab_size; j++) {
+                    shared_input_tab[i][j] = input_tab[(col + i) * Nx + row + j];
                 }
             }
-
-            output_tab[output_row_offset + col - Rx] = sum;
         }
-
         __syncthreads();
+
+        int sum = 0;
+        for (int j = 0; j < 2 * Rx + 1; j++) {
+            for (int i = 0; i < 2 * Rx + 1; i++) {
+                sum += shared_input_tab[(threadIdx.x + i)][threadIdx.y + j];
+            }
+        }
+        output_tab[(col) * (output_tab_size)+(row)] = sum;
+
     }
 }
 
@@ -116,9 +110,9 @@ int main() {
 
     cudaDeviceSynchronize();
 
-   // print_table(device_output, output_tab_size);
+    print_table(device_output, output_tab_size);
 
-    // Zwolnienie pamięci na GPU
+     // Zwolnienie pamięci na GPU
     cudaFreeHost(device_input);
     cudaFreeHost(device_output);
 
