@@ -12,7 +12,7 @@
 // R - dlugosc promienia zliczania
 // BS - wielkosc bloku
 
-__global__ void calculate(const int* input_tab, int* output_tab, int Nx, int Rx, int Kx) {
+__global__ void calculate(int* input_tab, int* output_tab, int Nx, int Rx, int Kx) {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = (blockIdx.x * blockDim.x + threadIdx.x) * Kx - 1;
 
@@ -42,6 +42,7 @@ __global__ void calculateShared(int* input_tab, int* output_tab, int Nx, int Rx,
 
     int output_tab_size = Nx - 2 * Rx;
     const int shared_input_tab_size = BS + 2 * R + 1;
+    int calculation_radius_range = 2 * Rx + 1;
 
     if (col < output_tab_size && row < output_tab_size) {
         __shared__ int shared_input_tab[shared_input_tab_size][shared_input_tab_size];
@@ -53,15 +54,17 @@ __global__ void calculateShared(int* input_tab, int* output_tab, int Nx, int Rx,
                 }
             }
         }
+
+        //Synchronizacja wątków po wczytaniu danych do pamięci współdzielonej
         __syncthreads();
 
         int sum = 0;
-        for (int j = 0; j < 2 * Rx + 1; j++) {
-            for (int i = 0; i < 2 * Rx + 1; i++) {
-                sum += shared_input_tab[(threadIdx.x + i)][threadIdx.y + j];
+        for (int i = 0; i < calculation_radius_range; i++) {
+            for (int j = 0; j < calculation_radius_range; j++) {
+                sum += shared_input_tab[threadIdx.x + j][threadIdx.y + i];
             }
         }
-        output_tab[(col) * (output_tab_size)+(row)] = sum;
+        output_tab[col * output_tab_size + row] = sum;
 
     }
 }
