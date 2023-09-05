@@ -3,36 +3,33 @@
 #include <device_launch_parameters.h>
 #include <math.h>
 
-#define BS 8
-#define N 20
-#define R 2
+#define BS 32
+#define N 500
+#define R 20
 #define K 1
 
 // N - dlugosc tablicy
 // R - dlugosc promienia zliczania
 // BS - wielkosc bloku
 
-__global__ void calculate(int* input_tab, int* output_tab, int Nx, int Rx, int Kx) {
+__global__ void calculateGlobal(int* input_tab, int* output_tab, int Nx, int Rx, int Kx) {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
-    int col = (blockIdx.x * blockDim.x + threadIdx.x) * Kx - 1;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
 
     int output_tab_size = Nx - 2 * Rx;
 
-    int output_row_offset = (row - Rx) * output_tab_size;
+    if (col < output_tab_size && row < output_tab_size) {
+        int sum = 0;
 
-    for (int k_iter = 0; k_iter < Kx; k_iter++) {
-        col++;
-
-        if (row >= Rx && row < Nx - Rx && col >= Rx && col < Nx - Rx) {
-            int sum = 0;
-
-            for (int r = -Rx; r <= Rx; r++) {
-                for (int c = -Rx; c <= Rx; c++) {
-                    sum += input_tab[(row + r) * Nx + col + c];
-                }
+        // Zliczanie sumy elementów w zasięgu promienia R
+        for (int i = -Rx; i <= Rx; i++) {
+            for (int j = -Rx; j <= Rx; j++) {
+                sum += input_tab[(col + j + Rx) * Nx + row + Rx + j];
             }
-            output_tab[output_row_offset + col - Rx] = sum;
         }
+
+        // Zapisywanie wyników sum do tablicy wynikowej
+        output_tab[col * output_tab_size + row] = sum;
     }
 }
 
@@ -109,11 +106,11 @@ int main() {
     dim3 gridSize((N - 2 * R + blockSize.x - 1) / blockSize.x, (N - 2 * R + blockSize.y - 1) / blockSize.y);
 
     // Wywołanie kernela na GPU
-    calculateShared << <gridSize, blockSize >> > (device_input, device_output, N, R, K);
+    calculateGlobal <<<gridSize, blockSize>>> (device_input, device_output, N, R, K);
 
     cudaDeviceSynchronize();
 
-    print_table(device_output, output_tab_size);
+    //print_table(device_output, output_tab_size);
 
      // Zwolnienie pamięci na GPU
     cudaFreeHost(device_input);
