@@ -3,66 +3,80 @@
 #include <device_launch_parameters.h>
 #include <math.h>
 
-#define BS 32
-#define N 500
+#define BS 16
+#define N 50
 #define R 20
-#define K 1
+#define K 3
 
 // N - dlugosc tablicy
 // R - dlugosc promienia zliczania
 // BS - wielkosc bloku
 
 __global__ void calculateGlobal(int* input_tab, int* output_tab, int Nx, int Rx, int Kx) {
-    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int row = (blockIdx.y * blockDim.y + threadIdx.y) * Kx - 1;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
 
     int output_tab_size = Nx - 2 * Rx;
 
-    if (col < output_tab_size && row < output_tab_size) {
-        int sum = 0;
+    for (int k_iter = 0; k_iter < Kx; k_iter++) {
+        row++;
 
-        // Zliczanie sumy elementów w zasięgu promienia R
-        for (int i = -Rx; i <= Rx; i++) {
-            for (int j = -Rx; j <= Rx; j++) {
-                sum += input_tab[(col + j + Rx) * Nx + row + Rx + j];
+        if (col < output_tab_size && row < output_tab_size) {
+            int sum = 0;
+
+            // Zliczanie sumy elementów w zasięgu promienia R
+            for (int i = -Rx; i <= Rx; i++) {
+                for (int j = -Rx; j <= Rx; j++) {
+                    sum += input_tab[(row + j + Rx) * Nx + col + Rx + i];
+                }
             }
-        }
 
-        // Zapisywanie wyników sum do tablicy wynikowej
-        output_tab[col * output_tab_size + row] = sum;
+            // Zapisywanie wyników sum do tablicy wynikowej
+            output_tab[row * output_tab_size + col] = sum;
+        }
     }
 }
 
 __global__ void calculateShared(int* input_tab, int* output_tab, int Nx, int Rx, int Kx) {
-    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int row = (blockIdx.y * blockDim.y + threadIdx.y);
     int col = blockIdx.x * blockDim.x + threadIdx.x;
 
     int output_tab_size = Nx - 2 * Rx;
-    const int shared_input_tab_size = BS + 2 * R + 1;
     int calculation_radius_range = 2 * Rx + 1;
+    const int shared_input_tab_size = BS + 2 * R + 1;
 
-    if (col < output_tab_size && row < output_tab_size) {
-        __shared__ int shared_input_tab[shared_input_tab_size][shared_input_tab_size];
+    for (int k_iter = 0; k_iter < Kx; k_iter++) {
+        int row_offset = row;
+        int col_offset = col + k_iter * output_tab_size;
 
-        if (threadIdx.x == 0 && threadIdx.y == 0) {
-            for (int i = 0; i < shared_input_tab_size; i++) {
-                for (int j = 0; j < shared_input_tab_size; j++) {
-                    shared_input_tab[i][j] = input_tab[(col + i) * Nx + row + j];
+        if (col_offset < output_tab_size && row_offset < output_tab_size) {
+            // Inicjalizacja tablicy pamięci współdzielonej
+            __shared__ int shared_input_tab[shared_input_tab_size * shared_input_tab_size];
+
+            // Wczytanie danych do pamięci współdzielonej przez wątek (0, 0)
+            if (threadIdx.x == 0 && threadIdx.y == 0) {
+                for (int i = 0; i < shared_input_tab_size; i++) {
+                    for (int j = 0; j < shared_input_tab_size; j++) {
+                        shared_input_tab[i * shared_input_tab_size + j] = input_tab[(row_offset + i) * Nx + col_offset + j];
+                    }
                 }
             }
-        }
 
-        //Synchronizacja wątków po wczytaniu danych do pamięci współdzielonej
-        __syncthreads();
+            // Synchronizacja wątków po wczytaniu danych do pamięci współdzielonej
+            __syncthreads();
 
-        int sum = 0;
-        for (int i = 0; i < calculation_radius_range; i++) {
-            for (int j = 0; j < calculation_radius_range; j++) {
-                sum += shared_input_tab[threadIdx.x + j][threadIdx.y + i];
+            // Zliczanie sumy elementów w zasięgu promienia R
+            int sum = 0;
+
+            for (int i = 0; i < calculation_radius_range; i++) {
+                for (int j = 0; j < calculation_radius_range; j++) {
+                    sum += shared_input_tab[(threadIdx.y + i) * shared_input_tab_size + threadIdx.x + j];
+                }
             }
-        }
-        output_tab[col * output_tab_size + row] = sum;
 
+            // Zapisywanie wyników sum do tablicy wynikowej
+            output_tab[row_offset * output_tab_size + col_offset] = sum;
+        }
     }
 }
 
